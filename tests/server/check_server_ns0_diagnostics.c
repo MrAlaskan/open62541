@@ -50,6 +50,12 @@ static void setup_serveronly(void) {
     ck_assert(server != NULL);
 }
 
+static void setup_serveronly_auditing_enabled(void) {
+    server = UA_Server_newForUnitTest();
+    ck_assert(server != NULL);
+    UA_Server_getConfig(server)->auditingEnabled = true;
+}
+
 static void teardown_serveronly(void) {
     UA_Server_delete(server);
 }
@@ -184,7 +190,19 @@ START_TEST(read_auditing) {
     UA_StatusCode res = readNodeValue(
         UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_AUDITING), &out);
     ck_assert_uint_eq(res, UA_STATUSCODE_GOOD);
-    ck_assert(out.type == &UA_TYPES[UA_TYPES_BOOLEAN]);
+    ck_assert(UA_Variant_hasScalarType(&out, &UA_TYPES[UA_TYPES_BOOLEAN]));
+    ck_assert_uint_eq(*(UA_Boolean*)out.data, false);
+    UA_Variant_clear(&out);
+} END_TEST
+
+START_TEST(read_auditing_enabled) {
+    UA_Variant out;
+    UA_Variant_init(&out);
+    UA_StatusCode res = readNodeValue(
+        UA_NODEID_NUMERIC(0, UA_NS0ID_SERVER_AUDITING), &out);
+    ck_assert_uint_eq(res, UA_STATUSCODE_GOOD);
+    ck_assert(UA_Variant_hasScalarType(&out, &UA_TYPES[UA_TYPES_BOOLEAN]));
+    ck_assert_uint_eq(*(UA_Boolean*)out.data, true);
     UA_Variant_clear(&out);
 } END_TEST
 
@@ -1169,6 +1187,12 @@ static Suite *testSuite_ns0Ext(void) {
     tcase_add_test(tc_svcLevel, read_serviceLevel);
     tcase_add_test(tc_svcLevel, read_auditing);
 
+    TCase *tc_svcLevel_auditing = tcase_create("ServiceLevelAuditing");
+    tcase_add_checked_fixture(tc_svcLevel_auditing,
+                              setup_serveronly_auditing_enabled,
+                              teardown_serveronly);
+    tcase_add_test(tc_svcLevel_auditing, read_auditing_enabled);
+
     TCase *tc_caps = tcase_create("Capabilities");
     tcase_add_checked_fixture(tc_caps, setup_serveronly, teardown_serveronly);
     tcase_add_test(tc_caps, read_serverProfileArray);
@@ -1235,6 +1259,7 @@ static Suite *testSuite_ns0Ext(void) {
     Suite *s = suite_create("NS0 Extended");
     suite_add_tcase(s, tc_status);
     suite_add_tcase(s, tc_svcLevel);
+    suite_add_tcase(s, tc_svcLevel_auditing);
     suite_add_tcase(s, tc_caps);
     suite_add_tcase(s, tc_diag);
     suite_add_tcase(s, tc_attr);
